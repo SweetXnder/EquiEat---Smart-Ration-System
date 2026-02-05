@@ -8,13 +8,12 @@ import java.util.*;
 import java.util.List;
 
 /**
- * EquiEat - SMART RATIONING SYSTEM (ALPHA)
+ * EquiEat - SMART RATIONING SYSTEM 
  * ---------------------------------------------------------
  * FEATURES:
  * 1. Demographic Analysis: Counts Infants, Seniors, Injured, etc.
  * 2. Audit Log: Logs actions to 'audit_log.txt'.
  * 3. Claim Stubs: Generates printable HTML tickets.
- * 4. Zero Waste Logic: Distributes 100% of stock in EQUITY.
  */
 public class SmartRationGUI extends JFrame { // Creates our GUI/Window
 
@@ -52,7 +51,7 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
     public SmartRationGUI() {
         logger.log("SYSTEM_STARTUP", "Application launched.");
 
-        setTitle("EquiEat -Smart Rationing System (SRS)");
+        setTitle("EquiEat -Smart Rationing System (SRS) - Integer Mode");
         setSize(1100, 750);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // X = Close the program :D
         setLocationRelativeTo(null); // Windows pop up in the dead center ALWAYS
@@ -116,7 +115,7 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
         reserveTable.setRowHeight(25);
         reserveTable.getTableHeader().setBackground(new Color(255, 200, 100));
         reservePanel.add(new JScrollPane(reserveTable), BorderLayout.CENTER);
-        reservePanel.add(new JLabel("  * Includes Specialized Medicine and Leftovers"), BorderLayout.SOUTH);
+        reservePanel.add(new JLabel("  * Includes Specialized Medicine and Leftovers (Whole Numbers Only)"), BorderLayout.SOUTH);
         tabbedPane.addTab("Reserve & Excess Stock", reservePanel);
 
         add(tabbedPane);
@@ -239,7 +238,7 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
         for (Supply s : inventoryList) s.setLeftover(0);
         int totalPop = loadedFamilies.stream().mapToInt(Family::getMemberCount).sum();
 
-        // 2. Run Engine
+        // 2. Run Engine (Updated to Whole Numbers)
         engine.distributeWithRounding(loadedFamilies, inventoryList, totalPop);
 
         // The Analysis of Demographic Data
@@ -258,8 +257,8 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
         for (Supply s : inventoryList) {
             if (s.cat == SupplyCategory.SPECIALIZED_MED || s.leftover > 0) {
                 String status = (s.cat == SupplyCategory.SPECIALIZED_MED) ? "Medical Stock" : "Rounding Excess";
-                String displayQty = (s.leftover == Math.floor(s.leftover)) ?
-                        String.format("%d", (int)s.leftover) : String.format("%.1f", s.leftover);
+                // Formatting for display: Whole numbers only
+                String displayQty = String.format("%d", (int)s.leftover);
                 reserveTableModel.addRow(new Object[]{ s.cat, s.name, displayQty, status });
             }
         }
@@ -374,7 +373,9 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
         private String id, headOfFamily;
         private int memberCount;
         public Set<PriorityAttribute> attributes;
-        private Map<String, Double> itemsReceived = new LinkedHashMap<>(); // Lets us output in order when something
+
+        //Map Integer instead of Double for Whole Numbers
+        private Map<String, Integer> itemsReceived = new LinkedHashMap<>();
         // is inserted to the inventory (Remembers our input in order)
 
 
@@ -382,7 +383,8 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
         public Family(String id, String name, int size, Set<PriorityAttribute> attrs) {
             this.id = id; this.headOfFamily = name; this.memberCount = size; this.attributes = attrs; // One liner for clear code
         }
-        public void receiveItem(String item, double qty) { itemsReceived.put(item, itemsReceived.getOrDefault(item, 0.0) + qty); }
+        // Receive item takes int qty
+        public void receiveItem(String item, int qty) { itemsReceived.put(item, itemsReceived.getOrDefault(item, 0) + qty); }
 
         // we look at/get the private classes values but not change it
         public void clearReceived() { itemsReceived.clear(); }
@@ -394,10 +396,9 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
         // Checks every family received items then turns it into a table
         public String getFormattedPackingList() {
             List<String> s = new ArrayList<>();
-            for (Map.Entry<String, Double> e : itemsReceived.entrySet()) {
-                double val = e.getValue();
-                String fmt = (val == Math.floor(val)) ? "%.0f pcs %s" : "%.1f pcs %s"; // rounds down to 1.0 or 1.5
-                s.add(String.format(fmt, val, e.getKey()));
+            for (Map.Entry<String, Integer> e : itemsReceived.entrySet()) {
+                // Simple integer formatting
+                s.add(String.format("%d pcs of %s", e.getValue(), e.getKey()));
             }
             return String.join(" + ", s); // i.e rather than "rice 5pcsmeat 6pcs" it will be "rice 5 pcs + meat 5 pcs"
         }
@@ -426,7 +427,10 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
                     eligible.addAll(families);
                     eligiblePop = totalPop;
                 }
-                double distributedTotal = 0;
+
+                // CHANGED: Tracking total distributed as Integer
+                int distributedTotal = 0;
+
                 if (eligiblePop > 0) {
                     double unitShare = (double) item.qty / eligiblePop;
                     for (Family f : eligible) {
@@ -434,7 +438,9 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
                         if (item.target != null) rawAllocation = (double) item.qty / eligible.size();
                         else rawAllocation = unitShare * f.getMemberCount();
 
-                        double safeAllocation = Math.floor(rawAllocation * 2) / 2.0;
+                        // Strict Floor to Integer
+                        int safeAllocation = (int) Math.floor(rawAllocation);
+
                         if (safeAllocation > 0) {
                             f.receiveItem(item.name, safeAllocation);
                             distributedTotal += safeAllocation;
@@ -467,8 +473,8 @@ public class SmartRationGUI extends JFrame { // Creates our GUI/Window
                 pw.println("----------------------------------------------");
                 for(Supply s : inv) {
                     if (s.cat == SupplyCategory.SPECIALIZED_MED || s.leftover > 0) {
-                        String displayQty = (s.leftover == Math.floor(s.leftover)) ?
-                                String.format("%d", (int)s.leftover) : String.format("%.1f", s.leftover);
+                        //Format reserve stock as integer
+                        String displayQty = String.format("%d", (int)s.leftover);
                         pw.printf("%-20s | %-15s | %-15s%n", s.name, s.cat, displayQty);
                     }
                 }
